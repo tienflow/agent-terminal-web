@@ -4,7 +4,7 @@ RUN apk add --no-cache bash bash-completion
 
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 COPY app.py index.html ./
 
