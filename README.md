@@ -73,6 +73,27 @@ POST /clear-history
 GET /ws
 ```
 
+### MCP Server
+
+服务同时提供 MCP Server，Agent 可通过标准 MCP 协议连接：
+
+- SSE 端点：`http://<服务器IP>:7681/mcp/sse`
+- 暴露 4 个 Tools：
+  - `execute_command` — 执行命令并返回输出
+  - `read_history` — 读取终端回放缓存
+  - `clear_history` — 清空回放缓存
+  - `health_check` — 检查服务状态
+
+Agent 配置示例：
+```json
+{
+  "mcpServers": {
+    "agent-terminal": {
+      "url": "http://<服务器IP>:7681/mcp/sse"
+    }
+  }
+}
+
 
 ## AI Agent 调用方式
 
