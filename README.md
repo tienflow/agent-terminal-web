@@ -29,19 +29,19 @@
 ## 本地构建
 
 ```bash
-docker build -t agent-terminal:latest .
+docker buildx build --platform linux/amd64 -t agent-terminal-web:x86 --load .
 ```
 
 ## 本地运行
 
 ```bash
 docker run -d \
-  --name agent-terminal \
+  --name agent-terminal-web \
   --restart unless-stopped \
   --privileged \
   --pid=host \
   -p 7681:7681 \
-  agent-terminal:latest
+  agent-terminal-web:x86
 ```
 
 ## 接口
@@ -78,3 +78,19 @@ GET /ws
 离线服务器部署见：
 
 - [docs/离线部署指南.md](docs/离线部署指南.md)
+
+
+## x86 镜像打包
+
+当前已验证可在 Apple Silicon 主机上构建 x86 镜像：
+
+```bash
+docker buildx build --platform linux/amd64 -t agent-terminal-web:x86 --load .
+```
+
+导出离线包：
+
+```bash
+docker save -o agent-terminal-web-x86.tar agent-terminal-web:x86
+gzip -f agent-terminal-web-x86.tar
+```
