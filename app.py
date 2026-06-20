@@ -46,8 +46,9 @@ async def execute_command(cmd: str, timeout: int = 30) -> str:
     if master_fd is None:
         return "Error: PTY not ready"
 
-    # Record current history length as baseline
-    before = get_pty_history()
+    # Record current history as baseline for output extraction
+    original_before = get_pty_history()
+    before = original_before
 
     # Send command to PTY
     os.write(master_fd, (cmd + "\n").encode("utf-8"))
@@ -70,7 +71,7 @@ async def execute_command(cmd: str, timeout: int = 30) -> str:
 
     # Extract new output (everything after the original history)
     full = get_pty_history()
-    new_output = full[len(before):] if len(full) > len(before) else ""
+    new_output = full[len(original_before):] if len(full) > len(original_before) else ""
 
     # Clean up: remove the command echo and trailing prompt
     lines = new_output.split("\n")
