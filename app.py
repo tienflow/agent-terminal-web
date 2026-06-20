@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import pty
+import re
 import select
 import struct
 import fcntl
@@ -13,7 +14,6 @@ from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
-import re
 from mcp.server.fastmcp import FastMCP
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -26,11 +26,13 @@ app = FastAPI()
 # ---------------------------------------------------------------------------
 mcp_server = FastMCP("agent-terminal", sse_path="/sse", message_path="/messages/")
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07")
+_cmd_lock = asyncio.Lock()
+
 
 def _strip_ansi(text: str) -> str:
     """Remove ANSI escape sequences from text."""
-    ansi_escape = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07")
-    return ansi_escape.sub("", text)
+    return _ANSI_RE.sub("", text)
 
 
 @mcp_server.tool()
@@ -46,48 +48,57 @@ async def execute_command(cmd: str, timeout: int = 30) -> str:
     if master_fd is None:
         return "Error: PTY not ready"
 
-    # Record current history as baseline for output extraction
-    original_before = get_pty_history()
-    before = original_before
+    async with _cmd_lock:
+        # Record current history as baseline for output extraction
+        original_before = get_pty_history()
+        before = original_before
 
-    # Send command to PTY
-    os.write(master_fd, (cmd + "\n").encode("utf-8"))
+        # Send command to PTY
+        try:
+            os.write(master_fd, (cmd + "\n").encode("utf-8"))
+        except OSError as e:
+            return f"Error: failed to write to PTY: {e}"
 
-    # Wait for output to stabilize
-    stable_count = 0
-    elapsed = 0.0
-    interval = 0.2
-    while elapsed < timeout:
-        await asyncio.sleep(interval)
-        elapsed += interval
-        after = get_pty_history()
-        if after == before:
-            stable_count += 1
-            if stable_count >= 3:  # Stable for 0.6 seconds
-                break
+        # Wait for output to stabilize
+        stable_count = 0
+        elapsed = 0.0
+        interval = 0.2
+        timed_out = False
+        while elapsed < timeout:
+            await asyncio.sleep(interval)
+            elapsed += interval
+            after = get_pty_history()
+            if after == before:
+                stable_count += 1
+                if stable_count >= 3:  # Stable for 0.6 seconds
+                    break
+            else:
+                stable_count = 0
+                before = after
         else:
-            stable_count = 0
-            before = after
+            timed_out = True
 
-    # Extract new output (everything after the original history)
-    full = get_pty_history()
-    new_output = full[len(original_before):] if len(full) > len(original_before) else ""
+        # Extract new output (everything after the original history)
+        full = get_pty_history()
+        new_output = full[len(original_before):] if len(full) > len(original_before) else ""
 
-    # Clean up: remove the command echo and trailing prompt
-    lines = new_output.split("\n")
-    # Remove first line (command echo) if present
-    if lines and cmd.strip() in lines[0]:
-        lines = lines[1:]
-    # Remove last line if it looks like a prompt (non-empty, no newline)
-    if lines and not lines[-1].endswith("\n") and any(
-        c in lines[-1] for c in ["$", "#", "%", ">"]
-    ):
-        lines = lines[:-1]
+        # Clean up: remove the command echo and trailing prompt
+        lines = new_output.split("\n")
+        # Remove first line (command echo) if present
+        if lines and cmd.strip() in lines[0]:
+            lines = lines[1:]
+        # Remove last line if it looks like a prompt (non-empty, no newline)
+        if lines and not lines[-1].endswith("\n") and any(
+            c in lines[-1] for c in ["$", "#", "%", ">"]
+        ):
+            lines = lines[:-1]
 
-    result = "\n".join(lines).strip()
-    if not result:
-        result = "(no output)"
-    return _strip_ansi(result)
+        result = "\n".join(lines).strip()
+        if not result:
+            result = "(no output)"
+        if timed_out:
+            result += f"\n[timeout after {timeout}s — command may still be running]"
+        return _strip_ansi(result)
 
 
 @mcp_server.tool()
