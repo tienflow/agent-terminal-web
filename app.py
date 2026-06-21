@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 import json
 import os
 import pty
@@ -19,7 +20,6 @@ from mcp.server.fastmcp import FastMCP
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 log = logging.getLogger("agent-term")
 
-app = FastAPI()
 
 # ---------------------------------------------------------------------------
 # MCP Server
@@ -244,7 +244,25 @@ async def _broadcast_cmds():
         subscribers.difference_update(dead)
 
 
-@app.on_event("startup")
+# Pre-initialize streamable HTTP app (creates session manager)
+_streamable_http_app = mcp_server.streamable_http_app()
+
+
+@asynccontextmanager
+async def lifespan(app):
+    global _loop
+    _loop = asyncio.get_event_loop()
+    init_pty()
+    _loop.run_in_executor(None, _pty_reader)
+    _loop.create_task(_broadcast_pty())
+    _loop.create_task(_broadcast_cmds())
+    log.info("Agent-Terminal started — host mode (nsenter)")
+    async with mcp_server.session_manager.run():
+        yield
+
+
+app = FastAPI(lifespan=lifespan)
+
 async def startup():
     global _loop
     _loop = asyncio.get_event_loop()
@@ -327,4 +345,4 @@ async def index():
 # Mount MCP SSE sub-application
 app.mount("/mcp", mcp_server.sse_app(mount_path="/"))
 # Mount MCP Streamable HTTP sub-application (for Codex and newer MCP clients)
-app.mount("/http", mcp_server.streamable_http_app())
+app.mount("/http", _streamable_http_app)
