@@ -24,7 +24,7 @@ app = FastAPI()
 # ---------------------------------------------------------------------------
 # MCP Server
 # ---------------------------------------------------------------------------
-mcp_server = FastMCP("agent-terminal", sse_path="/sse", message_path="/messages/")
+mcp_server = FastMCP("agent-terminal", sse_path="/sse", message_path="/messages/", host="0.0.0.0")
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07")
 _cmd_lock = asyncio.Lock()
@@ -325,4 +325,4 @@ async def index():
 
 
 # Mount MCP SSE sub-application
-app.mount("/mcp", mcp_server.sse_app(mount_path="/mcp"))
+app.mount("/mcp", mcp_server.sse_app(mount_path="/"))
