@@ -326,3 +326,5 @@ async def index():
 
 # Mount MCP SSE sub-application
 app.mount("/mcp", mcp_server.sse_app(mount_path="/"))
+# Mount MCP Streamable HTTP sub-application (for Codex and newer MCP clients)
+app.mount("/http", mcp_server.streamable_http_app())
