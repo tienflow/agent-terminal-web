@@ -75,25 +75,30 @@ GET /ws
 
 ### MCP Server
 
-服务同时提供 MCP Server，Agent 可通过标准 MCP 协议连接：
+服务同时提供 MCP Server，支持两种传输方式：
 
-- SSE 端点：`http://<服务器IP>:7681/mcp/sse`
-- 暴露 4 个 Tools：
-  - `execute_command` — 执行命令并返回输出
-  - `read_history` — 读取终端回放缓存
-  - `clear_history` — 清空回放缓存
-  - `health_check` — 检查服务状态
+| 传输方式 | 端点 | 适用场景 |
+|----------|------|----------|
+| Streamable HTTP | `http://<IP>:7681/http/mcp` | Codex、新版 MCP 客户端（推荐） |
+| SSE | `http://<IP>:7681/mcp/sse` | 旧版 MCP 客户端 |
 
-Agent 配置示例：
+暴露 4 个 Tools：`execute_command`、`read_history`、`clear_history`、`health_check`
+
+Codex 配置（`~/.codex/config.toml`）：
+```toml
+[mcp_servers.agent-terminal]
+url = "http://<服务器IP>:7681/http/mcp"
+```
+
+其他 MCP 客户端（JSON 格式）：
 ```json
 {
   "mcpServers": {
     "agent-terminal": {
-      "url": "http://<服务器IP>:7681/mcp/sse"
+      "url": "http://<服务器IP>:7681/http/mcp"
     }
   }
 }
-```
 
 
 ## AI Agent 调用方式
